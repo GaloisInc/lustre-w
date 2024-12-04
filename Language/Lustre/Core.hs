@@ -72,7 +72,7 @@ infix 2 :::
 infix 3 `On`
 
 data Node     = Node { nInputs      :: [Binder]
-                     , nOutputs     :: [CoreName]
+                     , nOutputs     :: [Binder]
                      , nAbstract    :: [Binder]
                        -- ^ Locals with no definitions
 
@@ -213,11 +213,16 @@ ppEqnGroup env grp =
     NonRec eqn -> ppEqn env eqn
     Rec eqns   -> "rec" $$ nest 2 (vcatSep (map (ppEqn env) eqns))
 
+binderName :: Binder -> CoreName
+binderName (c ::: _) = c
+
+ppBinderName :: PPInfo -> Binder -> Doc
+ppBinderName env b = ppIdent env $ binderName b
 
 ppNode :: Node -> Doc
 ppNode node =
   text "node" <+> ppTuple (map (ppBinder env) (nInputs node))
-  $$ nest 2 (  text "returns" <+> ppTuple (map (ppIdent env) (nOutputs node))
+  $$ nest 2 (  text "returns" <+> ppTuple (map (ppBinderName env) (nOutputs node))
             $$ text "assumes" <+> ppTuple (map (ppIdent env . snd)
                                                 (nAssuming node))
             $$ text "shows" <+> ppTuple (map (ppIdent env .snd) (nShows node))
@@ -287,6 +292,7 @@ instance Pretty CoreName where
 -- | Compute the typing environment for a node.
 nodeEnv :: Node -> Map CoreName CType
 nodeEnv nd = Map.fromList $ map fromB (nInputs nd) ++
+                            map fromB (nOutputs nd) ++
                             map fromB (nAbstract nd) ++
                             map fromE (concatMap grpEqns (nEqns nd))
   where

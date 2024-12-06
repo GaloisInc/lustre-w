@@ -265,7 +265,7 @@ nameExpr expr =
   where
   stem = case expr of
            C.Atom a -> case a of
-                         C.Prim op _ -> Text.pack (show op)
+                         C.Prim op _ _ -> Text.pack (show op)
                          _ -> panic "nameExpr" [ "Naming a simple atom?"
                                                , "*** Atom:" ++ showPP a ]
            C.Pre a       -> namedStem "pre" a
@@ -336,9 +336,10 @@ inputTypeAsmps (v C.::: ct) ty =
 
   inRange x y =
     do let va   = C.Var v
-           lb   = C.Prim C.Leq [ lit x, va ]
-           ub   = C.Prim C.Leq [ va, lit y ]
-           prop = C.Prim C.And [ lb, ub ]
+           lb   = C.Prim C.Leq [ lit x, va ] [boolTy]
+           ub   = C.Prim C.Leq [ va, lit y ] [boolTy]
+           prop = C.Prim C.And [ lb, ub ] [boolTy]
+           boolTy = C.TBool `C.On` C.clockOfCType ct
            lab  = C.coreNameTextName v <> "_bounds"
        pn <- newIdentFrom lab
        let lhs = pn C.::: C.TBool `C.On` C.clockOfCType ct
@@ -436,9 +437,10 @@ evalClockExpr (P.WhenClock _ e1 i) =
      env <- getLocalTypes
      let a2 = C.Var (evalIdent i)
          ty = C.typeOf env a2
+         boolTy = C.TBool `C.On` C.clockOfCType ty
      pure $ case a1 of
               C.Bool True -> a2
-              _           -> C.Prim C.Eq [ C.Lit a1 ty, a2 ]
+              _           -> C.Prim C.Eq [ C.Lit a1 ty, a2 ] [boolTy]
 
 evalIClock :: P.IClock -> M C.Clock
 evalIClock clo =
@@ -454,20 +456,20 @@ evalCurrentWith xt d e =
          c@(C.WhenTrue ca) = C.clockOfCType ty
          Just cc = C.clockParent env c
      case xt of
-       Just x -> desugar x ca
+       Just x -> desugar x ca ty
        Nothing ->
          do i  <- newIdentFrom "curW"
             let thisTy = C.typeOfCType ty `C.On` cc
             addLocal i thisTy
-            e1 <- desugar i ca
+            e1 <- desugar i ca thisTy
             addEqn (i C.::: thisTy C.:= e1)
             pure (C.Atom (C.Var i))
   where
-  desugar x c =
+  desugar x c ty =
     do cur  <- nameExpr (C.Current e)
        pre  <- nameExpr (C.Pre (C.Var x))
        hold <- nameExpr (d C.:->  pre)
-       pure (C.Atom (C.Prim C.ITE [c,cur,hold]))
+       pure (C.Atom (C.Prim C.ITE [c,cur,hold] [ty]))
 
 evalConstExpr :: P.Expression -> M C.Literal
 evalConstExpr expr =
@@ -532,7 +534,7 @@ evalExpr xt expr =
           []  -> bad "empty merge"
           [(_,e)] -> evalExpr Nothing e
           (p,e) : rest ->
-             do let b = C.Prim C.Eq [ C.Lit p ty, j ]
+             do let b = C.Prim C.Eq [ C.Lit p ty, j ] [C.TBool `C.On` C.clockOfCType ty]
                 more <- go ty j rest
                 l    <- evalExprAtom e
                 r    <- case more of
@@ -547,14 +549,18 @@ evalExpr xt expr =
     P.UpdateStruct {} -> bad "update-struct"
     P.WithThenElse {} -> bad "with-then-else"
 
-    P.Call ni es cl ->
+    P.Call ni es _ Nothing ->
+        panic "ToCore.evalExpr" $ [ "Got a Call with no type", "NodeInst:", show ni, "Arguments:"] ++ (show <$> es)
+
+    P.Call ni es cl (Just tys) ->
       do _clv <- evalIClock cl
+         tys' <- mapM evalCType tys
          {- NOTE: we don't really store the clock of the call anywhere,
          because for primitives (which is all that should be left)
          it can be computed from the clocks of the arguments. -}
 
          as <- mapM evalExprAtom es
-         let prim x = pure (C.Atom (C.Prim x as))
+         let prim x = pure (C.Atom (C.Prim x as tys'))
          case ni of
            P.NodeInst (P.CallPrim _ p) [] ->
              case p of

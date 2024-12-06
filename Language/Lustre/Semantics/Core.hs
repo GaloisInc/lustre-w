@@ -112,7 +112,7 @@ evalAtom s atom =
   case atom of
     Lit l _ -> evalLit l
     Var x -> evalVar s x
-    Prim op as -> evalPrimOp op (map (evalAtom s) as)
+    Prim op as _ -> evalPrimOp op (map (evalAtom s) as)
 
 
 evalEqnGrp :: Map CoreName CType ->

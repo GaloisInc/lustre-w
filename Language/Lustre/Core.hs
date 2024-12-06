@@ -44,7 +44,7 @@ data Binder   = CoreName ::: CType
 
 data Atom     = Lit Literal CType
               | Var CoreName
-              | Prim Op [Atom]
+              | Prim Op [Atom] [CType]
                 deriving Show
 
 data Expr     = Atom Atom
@@ -106,7 +106,7 @@ usesAtom atom =
   case atom of
     Lit _ _   -> Set.empty
     Var x     -> Set.singleton x
-    Prim _ as -> Set.unions (map usesAtom as)
+    Prim _ as _ -> Set.unions (map usesAtom as)
 
 usesExpr :: Expr -> Set CoreName
 usesExpr expr =
@@ -186,7 +186,7 @@ ppAtom env atom =
                    BaseClock  -> pp l
                    WhenTrue a -> pp l <+> "/* when" <+> ppAtom env a <+> "*/"
     Var x     -> ppIdent env x
-    Prim f as -> ppPrim f PP.<> ppTuple (map (ppAtom env) as)
+    Prim f as _ -> ppPrim f PP.<> ppTuple (map (ppAtom env) as)
 
 ppExpr :: PPInfo -> Expr -> Doc
 ppExpr env expr =
@@ -317,44 +317,15 @@ instance TypeOf Atom where
                  Nothing -> panic "typeOf" ["Undefined variable: " ++ showPP x]
       Lit _ ty -> ty
 
-      Prim op as  ->
-        case as of
-          a : _ ->
-             let t `On` c = typeOf env a
-                 ret x = x `On` c
-             in case op of
-                  IntCast    -> ret TInt
-                  FloorCast  -> ret TInt
-                  RealCast   -> ret TReal
+      prim@(Prim op as tys) ->
+        case op of
+          ITE -> case as of
+                   _ : b : _ -> typeOf env b
+                   _ -> panic "typeOf" ["Malformed ITE"]
 
-                  Not        -> ret TBool
-                  And        -> ret TBool
-                  Or         -> ret TBool
-                  Xor        -> ret TBool
-                  Implies    -> ret TBool
-                  Eq         -> ret TBool
-                  Neq        -> ret TBool
-                  Lt         -> ret TBool
-                  Leq        -> ret TBool
-                  Gt         -> ret TBool
-                  Geq        -> ret TBool
-                  AtMostOne  -> ret TBool
-                  Nor        -> ret TBool
-
-                  Neg        -> ret t
-                  Mul        -> ret t
-                  Mod        -> ret t
-                  Div        -> ret t
-                  Add        -> ret t
-                  Sub        -> ret t
-                  Power      -> ret t
-
-                  ITE        -> case as of
-                                  _ : b : _ -> typeOf env b
-                                  _ -> panic "typeOf" ["Malformed ITE"]
-          _ -> panic "typeOf" ["0 arity prim: " ++ showPP op]
-
-
+          _ -> case tys of
+              [ty] -> ty
+              _ -> panic "typeOf" ["Prim has unexpected types:", show prim]
 
 instance TypeOf Expr where
   typeOf env expr =

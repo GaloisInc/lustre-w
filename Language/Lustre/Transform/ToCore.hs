@@ -273,7 +273,7 @@ nameExpr expr =
            _ C.:-> a     -> namedStem "init" a
            C.When _ a    -> namedStem "when" a
            C.Current a   -> namedStem "current" a
-           C.Merge a _ _ -> namedStem "merge" a
+           C.Merge (a, _) _ -> namedStem "merge" (C.Var a)
 
   namedStem t a = case a of
                     C.Var i -> t <> "_" <> C.coreNameTextName i
@@ -516,32 +516,15 @@ evalExpr xt expr =
 
 
     P.Merge i alts ->
-      do let j = C.Var (evalIdent i)
+      do let iName = evalIdent i
          env <- getLocalTypes
-         let ty = C.typeOf env j
-         as <- forM alts $ \(P.MergeCase k e) -> do p  <- evalConstExpr k
-                                                    pure (p,e)
-         case as of
-           [ (C.Bool b, e1), (_,e2) ] ->
-              do e1' <- evalExprAtom e1
-                 e2' <- evalExprAtom e2
-                 pure $ if b then C.Merge j e1' e2' else C.Merge j e2' e1'
-           _ -> go ty j as
+         let ty = C.typeOf env (C.Var iName)
 
+         bs <- forM alts $ \(P.MergeCase k e) -> do p  <- evalConstExpr k
+                                                    e' <- evalExprAtom e
+                                                    pure (p,e')
 
-      where
-      go ty j as =
-        case as of
-          []  -> bad "empty merge"
-          [(_,e)] -> evalExpr Nothing e
-          (p,e) : rest ->
-             do let b = C.Prim C.Eq [ C.Lit p ty, j ] [C.TBool `C.On` C.clockOfCType ty]
-                more <- go ty j rest
-                l    <- evalExprAtom e
-                r    <- case more of
-                          C.Atom x -> pure x
-                          _        -> nameExpr more
-                pure (C.Merge b l r)
+         pure (C.Merge (iName, ty) bs)
 
     P.Tuple {}  -> bad "tuple"
     P.Array {}  -> bad "array"

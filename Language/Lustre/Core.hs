@@ -52,7 +52,7 @@ data Expr     = Atom Atom
               | Pre Atom
               | Atom `When` Atom
               | Current Atom
-              | Merge Atom Atom Atom
+              | Merge (CoreName, CType) [(Literal, Atom)]
                 deriving Show
 
 data Op       = Not | Neg
@@ -118,7 +118,7 @@ usesExpr expr =
     Pre _         -> Set.empty -- refer to values at previous instance
     a1 `When` a2  -> Set.union (usesAtom a1) (usesAtom a2)
     Current a     -> usesAtom a
-    Merge a b c   -> Set.unions (map usesAtom [a,b,c])
+    Merge (i, _) bs -> Set.unions $ (usesAtom $ Var i) : ((usesAtom . snd) <$> bs)
 
 usesClock :: Clock -> Set CoreName
 usesClock c =
@@ -198,9 +198,11 @@ ppExpr env expr =
     Pre a       -> text "pre" <+> ppAtom env a
     a `When` b  -> ppAtom env a <+> text "when" <+> ppAtom env b
     Current a   -> text "current" <+> ppAtom env a
-    Merge a b c ->
-      text "merge" <+> ppAtom env a <+> ppAtom env b <+> ppAtom env c
-
+    Merge (a, ty) bs ->
+      text "merge" <+> ppAtom env (Var a) <+> vcat (ppBranch <$> bs)
+      where
+        ppBranch (lit, body) =
+          ppAtom env (Lit lit ty) <+> "=>" <+> ppAtom env body
 
 ppTuple :: [Doc] -> Doc
 ppTuple ds = parens (hsep (punctuate comma ds))
@@ -340,7 +342,8 @@ instance TypeOf Expr where
       Current a   -> let t `On` c  = typeOf env a
                          Just c1   = clockParent env c
                       in t `On` c1
-      Merge c b _ -> let _ `On` c1 = typeOf env c
-                         t `On` _  = typeOf env b
-                      in t `On` c1
+      Merge (_, (_ `On` c1)) ((_, e):_) ->
+        let t `On` _ = typeOf env e
+        in t `On` c1
+      Merge {} -> error "typeOf: malformed Merge"
 

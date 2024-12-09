@@ -71,7 +71,9 @@ infix 1 :=
 infix 2 :::
 infix 3 `On`
 
-data Node     = Node { nInputs      :: [Binder]
+data Node     = Node { nName        :: Ident
+                     -- ^ Node name
+                     , nInputs      :: [Binder]
                      , nOutputs     :: [Binder]
                      , nAbstract    :: [Binder]
                        -- ^ Locals with no definitions

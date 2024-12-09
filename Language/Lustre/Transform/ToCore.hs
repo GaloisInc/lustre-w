@@ -106,7 +106,8 @@ evalNodeDecl enumCs nd
 
          asts <- getAssertNames
          props <- getPropertyNames
-         pure C.Node { C.nInputs   = ins
+         pure C.Node { C.nName     = P.nodeName nd
+                     , C.nInputs   = ins
                      , C.nOutputs  = outs
                      , C.nAbstract = [ l | l@(x C.::: _) <- locs
                                          , not (x `Set.member` withDef) ]

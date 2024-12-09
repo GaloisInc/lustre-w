@@ -156,7 +156,7 @@ evalEqn env old new (x ::: _ `On` c := expr) =
       guarded $ done $
       evalAtom old a
 
-    a :-> b ->
+    (a, _) :-> b ->
       guarded $
        if x `Set.member` sInitialized old
           then done (evalAtom new b)

@@ -48,7 +48,7 @@ data Atom     = Lit Literal CType
                 deriving Show
 
 data Expr     = Atom Atom
-              | Atom :-> Atom
+              | (Atom, CType) :-> Atom
               | Pre Atom
               | Atom `When` Atom
               | Current Atom
@@ -114,7 +114,7 @@ usesExpr :: Expr -> Set CoreName
 usesExpr expr =
   case expr of
     Atom a        -> usesAtom a
-    a1 :-> a2     -> Set.union (usesAtom a1) (usesAtom a2)
+    (a1, _) :-> a2 -> Set.union (usesAtom a1) (usesAtom a2)
     Pre _         -> Set.empty -- refer to values at previous instance
     a1 `When` a2  -> Set.union (usesAtom a1) (usesAtom a2)
     Current a     -> usesAtom a
@@ -194,7 +194,7 @@ ppExpr :: PPInfo -> Expr -> Doc
 ppExpr env expr =
   case expr of
     Atom a      -> ppAtom env a
-    a :-> b     -> ppAtom env a <+> text "->" <+> ppAtom env b
+    (a, _) :-> b -> ppAtom env a <+> text "->" <+> ppAtom env b
     Pre a       -> text "pre" <+> ppAtom env a
     a `When` b  -> ppAtom env a <+> text "when" <+> ppAtom env b
     Current a   -> text "current" <+> ppAtom env a
@@ -333,7 +333,7 @@ instance TypeOf Expr where
   typeOf env expr =
     case expr of
       Atom a      -> typeOf env a
-      a :-> _     -> typeOf env a
+      (_, ty) :-> _ -> ty
       Pre a       -> typeOf env a
       a `When` b  -> let t `On` _ = typeOf env a
                      in t `On` WhenTrue b

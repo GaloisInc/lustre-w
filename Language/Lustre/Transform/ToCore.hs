@@ -469,7 +469,7 @@ evalCurrentWith xt d e =
   desugar x c ty =
     do cur  <- nameExpr (C.Current e)
        pre  <- nameExpr (C.Pre (C.Var x))
-       hold <- nameExpr (d C.:->  pre)
+       hold <- nameExpr ((d, ty) C.:->  pre)
        pure (C.Atom (C.Prim C.ITE [c,cur,hold] [ty]))
 
 evalConstExpr :: P.Expression -> M C.Literal
@@ -582,8 +582,8 @@ evalExpr xt expr =
                  case as of
                    [v1,v2] -> case op2 of
                                 P.Fby       -> do v3 <- nameExpr (C.Pre v2)
-                                                  pure (v1 C.:-> v3)
-                                P.FbyArr    -> pure (v1 C.:-> v2)
+                                                  pure ((v1, tys' !! 0) C.:-> v3)
+                                P.FbyArr    -> pure ((v1, tys' !! 0) C.:-> v2)
                                 P.CurrentWith -> evalCurrentWith xt v1 v2
                                 P.And       -> prim C.And
                                 P.Or        -> prim C.Or

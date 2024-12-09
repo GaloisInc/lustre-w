@@ -223,7 +223,7 @@ ppBinderName env b = ppIdent env $ binderName b
 
 ppNode :: Node -> Doc
 ppNode node =
-  text "node" <+> ppTuple (map (ppBinder env) (nInputs node))
+  text "node" <+> pp (nName node) <+> ppTuple (map (ppBinder env) (nInputs node))
   $$ nest 2 (  text "returns" <+> ppTuple (map (ppBinderName env) (nOutputs node))
             $$ text "assumes" <+> ppTuple (map (ppIdent env . snd)
                                                 (nAssuming node))
